@@ -1,15 +1,30 @@
+"""
+This module defines a Flask web application that provides APIs for various functionalities.
+It includes routes to handle tree purchases via the Ecologi API and sending emails.
+
+Routes:
+- /purchase-trees (POST): Forwards tree purchase requests to the Ecologi API.
+- /send-email (POST): Sends an email with provided details.
+"""
+
+import smtplib
+from smtplib import SMTPException
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
-CORS(app)  # This enables CORS for all routes
+CORS(app)
 
 @app.route('/purchase-trees', methods=['POST'])
 def purchase_trees():
+    """
+    Handles the POST request to purchase trees.
+    Forwards the request to the Ecologi API and returns the response.
+    """
     print("Received request data:", request.json)  # Add this line to log the incoming data
 
     ecologi_api_url = 'https://public.ecologi.com/impact/trees'
@@ -18,18 +33,26 @@ def purchase_trees():
         'Content-Type': 'application/json'
     }
 
-    # Forward the POST request to the Ecologi API
-    response = requests.post(ecologi_api_url, headers=headers, json=request.json)
-
-    # Return the response from the Ecologi API
-    return jsonify(response.json()), response.status_code
+    try:
+        response = requests.post(ecologi_api_url, headers=headers, json=request.json, timeout=10)
+        return jsonify(response.json()), response.status_code
+    except requests.Timeout:
+        # Handle timeout exception
+        return jsonify({'message': 'Request to Ecologi API timed out'}), 504
+    except requests.RequestException as e:
+        # Handle other request-related errors
+        return jsonify({'message': f'An error occurred: {e}'}), 500
 
 @app.route('/send-email', methods=['POST'])
 def send_email():
+    """
+    Handles the POST request to send an email.
+    Sends an email with the provided subject and body to the specified recipient.
+    """
     data = request.json
-    recipient_email = "joshsparkes6@gmail.com"  # Your email
-    sender_email = "joshsparkes6@gmail.com"     # Replace with your email
-    sender_password = "dmdo vwry dukk cstf"           # Replace with your email password
+    recipient_email = "joshsparkes6@gmail.com"
+    sender_email = "joshsparkes6@gmail.com"
+    sender_password = "dmdo vwry dukk cstf"
 
     # Set up the email
     msg = MIMEMultipart()
@@ -43,15 +66,15 @@ def send_email():
 
     # Set up the SMTP server
     try:
-        server = smtplib.SMTP('smtp.gmail.com', 587)  
+        server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(sender_email, sender_password)
         text = msg.as_string()
         server.sendmail(sender_email, recipient_email, text)
         server.quit()
         return jsonify({'message': 'Email sent successfully'}), 200
-    except Exception as e:
-        print(e)
+    except SMTPException as e:
+        print(f"SMTP error occurred: {e}")
         return jsonify({'message': 'Failed to send email'}), 500
 
 if __name__ == '__main__':
